@@ -1,0 +1,62 @@
+name: loom-190-oauth-flag-follow
+
+services:
+  oracle:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: oracle
+    ports:
+      - "127.0.0.1:18791:80"
+    environment:
+      ORACLE_BIND: "0.0.0.0"
+      ORACLE_PORT: "80"
+    hostname: oracle
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 2s
+
+  loom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: loom
+    ports:
+      - "127.0.0.1:18790:8000"
+    environment:
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_DEFAULT_REGION: "us-east-1"
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "lab"
+      AWS_SECRET_ACCESS_KEY: "lab"
+      AWS_MAX_ATTEMPTS: "1"
+      LOOM_DATABASE_URL: "sqlite:////tmp/loom.db"
+      LOOM_LITELLM_PRICING_URL: ""
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: "/app"
+    volumes:
+      - ./poc.py:/lab/poc.py:ro
+    depends_on:
+      oracle:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
